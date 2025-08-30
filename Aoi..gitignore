@@ -1,0 +1,12 @@
+*.bin
+*.elf
+*.hex
+*.pyc
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+*.tmp
+*.log
