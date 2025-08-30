@@ -25,7 +25,7 @@ DallasTemperature.h
 Getting Started
 
 Clone this repository:
-git clone https://github.com/yourusername/esp32-solar-tracker.git
+git clone [https://github.com/yourusername/esp32-solar-tracker.git](https://github.com/Aoi-03/esp32-solar-tracker/tree/main)
 Open solar_tracker.ino in Arduino IDE.
 Install required libraries via Arduino Library Manager.
 Update your WiFi credentials and ThingSpeak API key in the code:
