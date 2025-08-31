@@ -1,7 +1,7 @@
 // ESP32 Solar Tracker with ThingSpeak Integration
 
-#include <WiFi.h>
-#include <HTTPClient.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
 #include <Servo.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -46,7 +46,7 @@ void setup() {
   tiltServo.attach(13);
   tiltServo.write(pos);
 }
-
+WiFiClient client; 
 void loop() {
   // === Read Voltage ===
   int rawV = analogRead(VOLTAGE_PIN);
@@ -91,7 +91,7 @@ void loop() {
     String url = serverName + "?api_key=" + apiKey + "&field1=" + String(voltage) +
                  "&field2=" + String(current) + "&field3=" + String(power) +
                  "&field4=" + String(tempC) + "&field5=" + String(pos);
-    http.begin(url);
+    http.begin(client, url); 
     int httpResponseCode = http.GET();
     http.end();
   }
