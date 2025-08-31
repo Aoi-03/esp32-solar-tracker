@@ -1,14 +1,15 @@
 // ESP32 Solar Tracker with ThingSpeak Integration
+// ESP32 Solar Tracker with ThingSpeak Integration (Optimized Speed)
 
-#include <ESP8266WiFi.h>
-#include <ESP8266HTTPClient.h>
-#include <Servo.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ESP32Servo.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
 // ==== WiFi Credentials ====
-const char* ssid = "YourWiFi";
-const char* password = "YourPassword";
+const char* ssid = "Wokwi-GUEST";
+const char* password = "";
 
 // ==== ThingSpeak API ====
 String serverName = "https://api.thingspeak.com/update";
@@ -32,6 +33,7 @@ DallasTemperature sensors(&oneWire);
 float voltage, current, power;
 float tempC;
 int pos = 90; // Servo initial position
+unsigned long lastUpdate = 0; // For ThingSpeak timing
 
 void setup() {
   Serial.begin(115200);
@@ -40,43 +42,51 @@ void setup() {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("WiFi Connected");
-  
+  Serial.println("\nWiFi Connected!");
+
   sensors.begin();
-  tiltServo.attach(13);
-  tiltServo.write(pos);
+  tiltServo.attach(13); // Servo control pin
+  tiltServo.write(pos); // Start in center position
 }
-WiFiClient client; 
+
 void loop() {
   // === Read Voltage ===
   int rawV = analogRead(VOLTAGE_PIN);
-  voltage = (rawV * 3.3 / 4095.0) * 11; // with divider ratio
+  voltage = (rawV * 3.3 / 4095.0) * 11; // Voltage divider ratio
 
   // === Read Current ===
   int rawI = analogRead(CURRENT_PIN);
-  current = ((rawI * 3.3 / 4095.0) - 2.5) / 0.185; // for ACS712 5A
+  current = ((rawI * 3.3 / 4095.0) - 2.5) / 0.185; // ACS712 formula
 
-  // === Power ===
+  // === Calculate Power ===
   power = voltage * current;
 
   // === Temperature ===
   sensors.requestTemperatures();
   tempC = sensors.getTempCByIndex(0);
 
-  // === LDR values ===
+  // === LDR readings ===
   int l1 = analogRead(LDR1);
   int l2 = analogRead(LDR2);
   int l3 = analogRead(LDR3);
   int l4 = analogRead(LDR4);
 
-  // === Adjust Servo ===
-  if ((l1 + l3) > (l2 + l4)) {
-    pos += 1;  // Move right
-  } else if ((l2 + l4) > (l1 + l3)) {
-    pos -= 1;  // Move left
+  // === Calculate difference ===
+  int leftSide = l1 + l3;
+  int rightSide = l2 + l4;
+  int diff = abs(leftSide - rightSide);
+
+  // === Servo movement (faster & proportional) ===
+  if (diff > 50) { // Move only if significant difference
+    int step = map(diff, 0, 3000, 1, 15); // Bigger diff → faster move
+    if (leftSide > rightSide) {
+      pos += step; // Move right
+    } else {
+      pos -= step; // Move left
+    }
+    pos = constrain(pos, 0, 180);
+    tiltServo.write(pos);
   }
-  pos = constrain(pos, 0, 180);
-  tiltServo.write(pos);
 
   // === Print Data ===
   Serial.print("Voltage: "); Serial.print(voltage);
@@ -85,16 +95,21 @@ void loop() {
   Serial.print(" W | Temp: "); Serial.print(tempC);
   Serial.print(" C | Servo: "); Serial.println(pos);
 
-  // === Send to ThingSpeak ===
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    String url = serverName + "?api_key=" + apiKey + "&field1=" + String(voltage) +
-                 "&field2=" + String(current) + "&field3=" + String(power) +
-                 "&field4=" + String(tempC) + "&field5=" + String(pos);
-    http.begin(client, url); 
-    int httpResponseCode = http.GET();
-    http.end();
+  // === Send to ThingSpeak every 10 sec ===
+  if (millis() - lastUpdate >= 10000) {
+    if (WiFi.status() == WL_CONNECTED) {
+      HTTPClient http;
+      String url = serverName + "?api_key=" + apiKey + "&field1=" + String(voltage) +
+                   "&field2=" + String(current) + "&field3=" + String(power) +
+                   "&field4=" + String(tempC) + "&field5=" + String(pos);
+      http.begin(url);
+      int httpResponseCode = http.GET();
+      Serial.print("ThingSpeak Response: ");
+      Serial.println(httpResponseCode);
+      http.end();
+    }
+    lastUpdate = millis();
   }
 
-  delay(10000);
+  delay(200); // Faster servo response
 }
